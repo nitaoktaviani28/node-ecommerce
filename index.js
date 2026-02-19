@@ -1,41 +1,47 @@
 /**
  * index.js
- * 
- * Equivalent to: main.go
- * 
- * Entry point aplikasi Node.js e-commerce.
- * Struktur ini MIRROR aplikasi Golang.
+ *
+ * FULL VERSION
+ * - UI aktif
+ * - PostgreSQL aktif
+ * - Observability tetap aman
  */
 
-// Initialize tracing FIRST (before any other imports)
-require('./observability/tracing').initTracing();
+// =========================
+// OBSERVABILITY (AMAN)
+// =========================
+try {
+    require('./observability/init').Init();
+    console.log('✅ Observability initialized');
+} catch (err) {
+    console.warn('⚠️ Observability skipped:', err.message);
+}
 
+// =========================
+// DEPENDENCIES
+// =========================
 const express = require('express');
 const client = require('prom-client');
-const observability = require('./observability/init');
 const repository = require('./repository/postgres');
+
 const productHandler = require('./handlers/product');
 const orderHandler = require('./handlers/order');
 
 // =========================
-// INISIALISASI APLIKASI
+// APP SETUP
 // =========================
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// Middleware
-app.use(express.urlencoded({ extended: true }));
+// Body parser
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Template engine (EJS - equivalent to Go html/template)
+// =========================
+// VIEW ENGINE (EJS)
+// =========================
 app.set('view engine', 'ejs');
 app.set('views', './templates');
-
-// =========================
-// INISIALISASI OBSERVABILITY
-// =========================
-// Equivalent to observability.Init() in Go main.go
-observability.Init();
 
 // =========================
 // PROMETHEUS METRICS
@@ -43,46 +49,53 @@ observability.Init();
 const register = new client.Registry();
 client.collectDefaultMetrics({ register });
 
-// Metrics endpoint
 app.get('/metrics', async (req, res) => {
-    res.set('Content-Type', register.contentType);
+    res.setHeader('Content-Type', register.contentType);
     res.end(await register.metrics());
 });
 
 // =========================
-// HTTP ROUTES
+// ROUTES
 // =========================
-// Equivalent to http.HandleFunc() in Go main.go
+
+// Health check (WAJIB K8S)
+app.get('/health', (req, res) => {
+    res.status(200).send('OK');
+});
+
+// Home (UI)
 app.get('/', productHandler.Home);
+
+// Checkout
 app.post('/checkout', orderHandler.Checkout);
+
+// Success page
 app.get('/success', orderHandler.Success);
 
 // =========================
 // START SERVER
 // =========================
-async function main() {
+async function start() {
     try {
-        // Initialize database
-        // Equivalent to repository.Init() in Go main.go
+        // Init database
         await repository.Init();
 
-        // Start HTTP server
         app.listen(PORT, () => {
-            console.log(`🚀 E-commerce Node.js app starting on :${PORT}`);
-        });
-
-        // Graceful shutdown
-        process.on('SIGTERM', async () => {
-            console.log('SIGTERM received, shutting down gracefully');
-            await repository.Close();
-            process.exit(0);
+            console.log(`🚀 Node.js app listening on :${PORT}`);
         });
     } catch (error) {
-        console.error('Failed to start application:', error);
+        console.error('❌ Failed to start application:', error);
         process.exit(1);
     }
 }
 
-// Run main function
-// Equivalent to main() in Go
-main();
+start();
+
+// =========================
+// GRACEFUL SHUTDOWN
+// =========================
+process.on('SIGTERM', async () => {
+    console.log('SIGTERM received, shutting down...');
+    await repository.Close();
+    process.exit(0);
+});
