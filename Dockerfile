@@ -40,4 +40,3 @@ ENV DATABASE_URL=postgresql://postgres:postgres@postgres.app.svc.cluster.local:5
 
 EXPOSE 8080
 CMD ["node", "index.js"]
-
